@@ -51,6 +51,12 @@ export PATH="${tools_prefix}/bin:${depot_tools}:${PATH}"
 export DEPOT_TOOLS_UPDATE=0
 export GCLIENT_SUPPRESS_GIT_VERSION_WARNING=1
 
+# A freshly cloned pinned depot_tools checkout does not yet contain the CIPD
+# Python runtime metadata used by gclient's wrappers. Auto-update is disabled
+# intentionally, so initialize the tools explicitly without moving the pinned
+# Git revision.
+DEPOT_TOOLS_DIR="${depot_tools}" "${depot_tools}/ensure_bootstrap"
+
 if [[ "${host_os}" == "Linux" && ! -x "${tools_prefix}/bin/pkgconf" ]]; then
   archive="${deps_root}/pkgconf-${pkgconf_version}.tar.xz"
   source_dir="${deps_root}/pkgconf-${pkgconf_version}"

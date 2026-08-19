@@ -9,7 +9,7 @@ at least one pushed commit, and a reachable remote URL. After publishing it,
 run from the `ya-ncdu` repository:
 
 ```sh
-git submodule add https://github.com/kiquxd/preview_lib.git third_party/preview_lib
+git submodule add https://github.com/kiquxd/ai-driven_preview-lib.git third_party/preview_lib
 git add .gitmodules third_party/preview_lib
 ```
 
