@@ -2,7 +2,8 @@
 
 `ya-ncdu` is prepared to consume this repository at
 `third_party/preview_lib`. CMake uses `add_subdirectory`, and the bootstrap
-script initializes the configured submodule before preparing PDFium.
+script initializes the configured submodule before validating its vendored stb
+headers. No PDFium download is performed.
 
 The gitlink cannot be created until `preview_lib` has its own Git repository,
 at least one pushed commit, and a reachable remote URL. After publishing it,

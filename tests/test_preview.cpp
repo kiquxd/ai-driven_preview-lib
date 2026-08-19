@@ -1,5 +1,6 @@
 #include <preview/preview.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <fstream>
@@ -202,6 +203,193 @@ void test_encodings(preview::Engine& engine) {
   }
 }
 
+bool has_token(const preview::TextPreview& text, std::string_view fragment,
+               preview::SyntaxToken token) {
+  for (const auto& line : text.lines) {
+    for (const auto& style : line.styles) {
+      if (style.token == token && style.byte_begin <= style.byte_end &&
+          style.byte_end <= line.text.size() &&
+          std::string_view(line.text).substr(
+              style.byte_begin, style.byte_end - style.byte_begin) == fragment) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void expect_valid_styles(const preview::TextPreview& text,
+                         std::string_view language) {
+  for (const auto& line : text.lines) {
+    std::uint32_t previous_end = 0;
+    for (const auto& style : line.styles) {
+      expect(style.byte_begin < style.byte_end,
+             std::string(language) + " style is non-empty");
+      expect(style.byte_begin >= previous_end,
+             std::string(language) + " styles are sorted and non-overlapping");
+      expect(style.byte_end <= line.text.size(),
+             std::string(language) + " style stays inside its UTF-8 line");
+      previous_end = style.byte_end;
+    }
+  }
+}
+
+const preview::TextPreview* highlighted_text(
+    preview::Engine& engine, std::string_view source_text,
+    std::string name, preview::Request request, preview::Preview& storage) {
+  MemorySource source(bytes(source_text), std::move(name));
+  auto result = engine.make_preview(source, request);
+  expect(result.has_value(), "highlighted text preview succeeds");
+  if (!result) return nullptr;
+  storage = std::move(result).value();
+  return std::get_if<preview::TextPreview>(&storage.content);
+}
+
+void test_syntax_highlighting(preview::Engine& engine) {
+  preview::Request request;
+  preview::Preview storage;
+
+  auto* cpp = highlighted_text(
+      engine,
+      "#include <string>\nint main() { const char* value = \"ok\"; return 7; } // note\n",
+      "sample.cpp", request, storage);
+  expect(cpp && cpp->syntax_language == preview::SyntaxLanguage::cpp,
+         "C++ is detected from extension");
+  if (cpp) {
+    expect(has_token(*cpp, "#include <string>",
+                     preview::SyntaxToken::preprocessor),
+           "C++ preprocessor is highlighted");
+    expect(has_token(*cpp, "int", preview::SyntaxToken::type),
+           "C++ type is highlighted");
+    expect(has_token(*cpp, "main", preview::SyntaxToken::function),
+           "C++ function is highlighted");
+    expect(has_token(*cpp, "// note", preview::SyntaxToken::comment),
+           "C++ comment is highlighted");
+    expect_valid_styles(*cpp, "C++");
+  }
+
+  auto* python = highlighted_text(
+      engine, "def greet(name):\n    # note\n    return f\"hello {name}\"\n",
+      "sample.py", request, storage);
+  expect(python && python->syntax_language == preview::SyntaxLanguage::python,
+         "Python is detected from extension");
+  if (python) {
+    expect(has_token(*python, "def", preview::SyntaxToken::keyword),
+           "Python keyword is highlighted");
+    expect(has_token(*python, "greet", preview::SyntaxToken::function),
+           "Python definition is highlighted");
+    expect(has_token(*python, "# note", preview::SyntaxToken::comment),
+           "Python comment is highlighted");
+    expect_valid_styles(*python, "Python");
+  }
+
+  auto* bash = highlighted_text(
+      engine, "#!/usr/bin/env bash\nif test -n $HOME; then echo ok; fi\n",
+      "script", request, storage);
+  expect(bash && bash->syntax_language == preview::SyntaxLanguage::bash,
+         "Bash is detected from shebang");
+  if (bash) {
+    expect(has_token(*bash, "if", preview::SyntaxToken::keyword),
+           "Bash keyword is highlighted");
+    expect(has_token(*bash, "$HOME", preview::SyntaxToken::property),
+           "Bash variable is highlighted");
+    expect_valid_styles(*bash, "Bash");
+  }
+
+  auto* json = highlighted_text(
+      engine, "{\"name\": \"preview\", \"enabled\": true, \"count\": 3}\n",
+      "settings.json", request, storage);
+  expect(json && json->syntax_language == preview::SyntaxLanguage::json,
+         "JSON is detected from extension");
+  if (json) {
+    expect(has_token(*json, "\"name\"", preview::SyntaxToken::property),
+           "JSON property is highlighted");
+    expect(has_token(*json, "true", preview::SyntaxToken::keyword),
+           "JSON literal is highlighted");
+    expect(has_token(*json, "3", preview::SyntaxToken::number),
+           "JSON number is highlighted");
+    expect_valid_styles(*json, "JSON");
+  }
+
+  auto* cmake = highlighted_text(
+      engine, "cmake_minimum_required(VERSION 3.24)\nset(NAME \"preview\") # note\n",
+      "CMakeLists.txt", request, storage);
+  expect(cmake && cmake->syntax_language == preview::SyntaxLanguage::cmake,
+         "CMake is detected from filename");
+  if (cmake) {
+    expect(has_token(*cmake, "cmake_minimum_required",
+                     preview::SyntaxToken::function),
+           "CMake command is highlighted");
+    expect(has_token(*cmake, "# note", preview::SyntaxToken::comment),
+           "CMake comment is highlighted");
+    expect_valid_styles(*cmake, "CMake");
+  }
+
+  auto* markdown = highlighted_text(
+      engine, "# Heading\nUse [preview](https://example.test) and `code`.\n",
+      "README.md", request, storage);
+  expect(markdown &&
+             markdown->syntax_language == preview::SyntaxLanguage::markdown,
+         "Markdown is detected from extension");
+  if (markdown) {
+    expect(has_token(*markdown, "# Heading", preview::SyntaxToken::heading),
+           "Markdown heading is highlighted");
+    expect(has_token(*markdown, "[preview](https://example.test)",
+                     preview::SyntaxToken::link),
+           "Markdown link is highlighted");
+    expect(has_token(*markdown, "`code`", preview::SyntaxToken::code_literal),
+           "Markdown inline code is highlighted");
+    expect_valid_styles(*markdown, "Markdown");
+  }
+
+  auto* plain = highlighted_text(engine, "ordinary text\n", "notes.txt",
+                                 request, storage);
+  expect(plain &&
+             plain->syntax_language == preview::SyntaxLanguage::plain_text &&
+             plain->lines[0].styles.empty(),
+         "unknown text remains unstyled");
+
+  request.syntax_language_hint = "cpp";
+  auto* hinted = highlighted_text(engine, "return 1;\n", "no-extension",
+                                  request, storage);
+  expect(hinted && hinted->syntax_language == preview::SyntaxLanguage::cpp &&
+             has_token(*hinted, "return", preview::SyntaxToken::keyword),
+         "explicit language hint overrides missing filename information");
+
+  request = {};
+  request.limits.max_syntax_spans = 1;
+  auto limited_source = MemorySource(bytes("int main() { return 1; }\n"),
+                                     "limited.cpp");
+  auto limited = engine.make_preview(limited_source, request);
+  expect(limited.has_value(), "span-limited highlighting succeeds");
+  if (limited) {
+    const auto* text = std::get_if<preview::TextPreview>(&limited.value().content);
+    expect(text && text->lines[0].styles.size() == 1,
+           "syntax span limit is respected");
+    expect(!limited.value().warnings.empty() &&
+               limited.value().warnings.back().code == "syntax_span_limit",
+           "syntax span limit emits a stable warning");
+  }
+
+  request = {};
+  request.byte_offset = 1;
+  auto continuation_source = MemorySource(bytes("int value = 1;\n"),
+                                          "continuation.cpp");
+  auto continuation = engine.make_preview(continuation_source, request);
+  expect(continuation.has_value(), "syntax continuation preview succeeds");
+  if (continuation) {
+    const auto* text = std::get_if<preview::TextPreview>(
+        &continuation.value().content);
+    expect(text && text->syntax_language == preview::SyntaxLanguage::cpp &&
+               text->lines[0].styles.empty(),
+           "continuation remains plain without lexical context");
+    expect(!continuation.value().warnings.empty() &&
+               continuation.value().warnings.back().code ==
+                   "syntax_context_unavailable",
+           "continuation context warning is stable");
+  }
+}
+
 void test_malformed(preview::Engine& engine) {
   std::vector<preview::Byte> png = {
       preview::Byte{0x89}, preview::Byte{'P'}, preview::Byte{'N'},
@@ -310,63 +498,21 @@ void test_jpeg_orientation(preview::Engine& engine) {
   }
 }
 
-void test_pdf(preview::Engine& engine) {
-  auto source = preview::open_local_file(
-      std::filesystem::path(PREVIEW_TEST_CORPUS) / "hello_world.pdf");
-  expect(source.has_value(), "open PDF fixture");
-  if (!source) return;
+void test_pdf_external_only(preview::Engine& engine) {
+  MemorySource source(bytes("%PDF-1.7\nminimal probe data"), "document.pdf");
   preview::Request request;
   request.mode = preview::Mode::visual;
-  request.viewport.target_pixel_width = 80;
-  request.viewport.target_pixel_height = 60;
-  auto rendered = engine.make_preview(*source.value(), request);
-  expect(rendered.has_value(), "PDF renders through custom ByteSource access");
-  if (rendered) {
-    const auto* pixels = std::get_if<preview::PixelPreview>(
-        &rendered.value().content);
-    expect(pixels && pixels->width > 0 && pixels->height > 0,
-           "PDF render returns a non-empty raster");
-    expect(rendered.value().detected_format == "pdf", "PDF is detected");
-  }
-}
-
-void test_pdf_probe_cache(preview::Engine& engine) {
-  MemorySource source(file_bytes(
-      std::filesystem::path(PREVIEW_TEST_CORPUS) / "hello_world.pdf"));
-  preview::Request request;
-  request.mode = preview::Mode::metadata;
   auto result = engine.make_preview(source, request);
-  expect(result.has_value(), "in-memory PDF metadata succeeds");
-  expect(source.read_calls() == 1,
-         "small PDF is served to PDFium entirely from the shared probe cache");
-
-  MemorySource uncached(file_bytes(
-      std::filesystem::path(PREVIEW_TEST_CORPUS) / "hello_world.pdf"));
-  request.limits.max_probe_bytes = 16;
-  request.limits.max_input_cache_bytes = 0;
-  auto without_cache = engine.make_preview(uncached, request);
-  expect(without_cache.has_value(),
-         "PDF remains functional when its range cache is disabled");
-}
-
-void test_pdf_passwords(preview::Engine& engine) {
-  auto source = preview::open_local_file(
-      std::filesystem::path(PREVIEW_TEST_CORPUS) / "encrypted.pdf");
-  expect(source.has_value(), "open encrypted PDF fixture");
-  if (!source) return;
-  preview::Request request;
-  request.mode = preview::Mode::metadata;
-  auto missing = engine.make_preview(*source.value(), request);
-  expect(!missing &&
-             missing.error().code == preview::Error::Code::password_required,
-         "missing PDF password is distinguished");
-  request.pdf_password = "definitely-wrong";
-  auto wrong = engine.make_preview(*source.value(), request);
-  expect(!wrong && wrong.error().code == preview::Error::Code::wrong_password,
-         "wrong PDF password is distinguished");
-  request.pdf_password = "\xc3\xa2ge";
-  auto correct = engine.make_preview(*source.value(), request);
-  expect(correct.has_value(), "correct UTF-8 PDF password succeeds");
+  expect(result.has_value(), "PDF detection returns a structured preview");
+  if (result) {
+    expect(result.value().detected_format == "pdf", "PDF is detected");
+    expect(result.value().detected_mime == "application/pdf",
+           "PDF MIME is reported");
+    expect(std::holds_alternative<preview::UnsupportedContent>(
+               result.value().content),
+           "PDF rendering is delegated to the application");
+  }
+  expect(source.read_calls() == 1, "PDF detection only performs the bounded probe");
 }
 
 void test_concurrent_engine(preview::Engine& engine) {
@@ -386,15 +532,6 @@ void test_concurrent_engine(preview::Engine& engine) {
       }
     });
   }
-  for (int worker = 0; worker < 2; ++worker) {
-    workers.emplace_back([&] {
-      MemorySource source(file_bytes(
-          std::filesystem::path(PREVIEW_TEST_CORPUS) / "hello_world.pdf"));
-      preview::Request request;
-      request.mode = preview::Mode::metadata;
-      if (!engine.make_preview(source, request)) ++errors;
-    });
-  }
   workers.clear();
   expect(errors.load() == 0,
          "one Engine supports concurrent calls with distinct sources");
@@ -402,7 +539,7 @@ void test_concurrent_engine(preview::Engine& engine) {
 
 void test_deterministic_mutation_corpus(preview::Engine& engine) {
   for (const std::string_view name : {"sample.png", "sample.jpg", "sample.gif",
-                                      "sample.bmp", "hello_world.pdf"}) {
+                                      "sample.bmp"}) {
     const auto original = file_bytes(
         std::filesystem::path(PREVIEW_TEST_CORPUS) / name);
     const std::vector<std::size_t> cuts = {
@@ -450,13 +587,12 @@ int main() {
   test_cancel(engine);
   test_partial_reads_and_probe_reuse(engine);
   test_encodings(engine);
+  test_syntax_highlighting(engine);
   test_malformed(engine);
   test_webp_disabled(engine);
   test_images(engine);
   test_jpeg_orientation(engine);
-  test_pdf(engine);
-  test_pdf_probe_cache(engine);
-  test_pdf_passwords(engine);
+  test_pdf_external_only(engine);
   test_concurrent_engine(engine);
   test_deterministic_mutation_corpus(engine);
   if (failures != 0) {

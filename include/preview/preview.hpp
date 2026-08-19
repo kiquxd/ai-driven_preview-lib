@@ -35,8 +35,6 @@ struct Error {
     unsupported,
     cancelled,
     limit_exceeded,
-    password_required,
-    wrong_password,
     backend_failure,
   };
 
@@ -84,8 +82,6 @@ struct Limits {
   std::uint64_t max_probe_bytes = 64 * 1024;
   std::uint64_t max_text_bytes = 2 * 1024 * 1024;
   std::uint64_t max_encoded_image_bytes = 32 * 1024 * 1024;
-  std::uint64_t max_pdf_bytes_read = 64 * 1024 * 1024;
-  std::uint64_t max_pdf_source_size = 4ull * 1024 * 1024 * 1024;
   std::uint64_t max_total_bytes_read = 64 * 1024 * 1024;
   std::size_t max_input_cache_bytes = 8 * 1024 * 1024;
   std::size_t max_working_bytes = 128 * 1024 * 1024;
@@ -94,6 +90,7 @@ struct Limits {
   std::uint32_t max_pixel_dimension = 4096;
   std::uint32_t max_text_lines = 500;
   std::uint32_t max_line_bytes = 64 * 1024;
+  std::uint32_t max_syntax_spans = 16 * 1024;
 };
 
 enum class PixelFormat { bgra8, rgba8 };
@@ -112,19 +109,53 @@ struct Request {
   Limits limits;
   Mode mode = Mode::automatic;
   std::uint64_t byte_offset = 0;
-  std::uint32_t page_index = 0;
-  std::uint32_t background_rgba = 0xffffffff;
   PixelFormat pixel_format = PixelFormat::bgra8;
-  std::string_view pdf_password;
+  std::string_view syntax_language_hint;
+  bool syntax_highlighting = true;
   std::stop_token stop_token;
+};
+
+enum class SyntaxLanguage {
+  plain_text,
+  cpp,
+  python,
+  bash,
+  json,
+  cmake,
+  markdown,
+};
+
+enum class SyntaxToken {
+  keyword,
+  type,
+  function,
+  string_literal,
+  number,
+  comment,
+  preprocessor,
+  property,
+  heading,
+  link,
+  code_literal,
+  operator_symbol,
+};
+
+struct StyledRange {
+  std::uint32_t byte_begin = 0;
+  std::uint32_t byte_end = 0;
+  SyntaxToken token = SyntaxToken::keyword;
 };
 
 struct TextLine {
   std::string text;
+  // Sorted, non-overlapping UTF-8 byte ranges. Gaps use the consumer's normal
+  // text style; colors deliberately remain a UI concern.
+  std::vector<StyledRange> styles;
 };
 
 struct TextPreview {
   std::vector<TextLine> lines;
+  SyntaxLanguage syntax_language = SyntaxLanguage::plain_text;
   std::uint64_t source_begin = 0;
   std::uint64_t source_end = 0;
   std::uint64_t next_offset = 0;

@@ -71,7 +71,7 @@ Result<Preview> make_hex(const ByteSource& source, const Request& request,
       if (line.size() > request.limits.max_line_bytes) {
         line.resize(request.limits.max_line_bytes);
       }
-      text.lines.push_back({std::move(line)});
+      text.lines.push_back({.text = std::move(line), .styles = {}});
     }
     text.source_end = request.byte_offset + input.value().size();
     text.next_offset = text.source_end;

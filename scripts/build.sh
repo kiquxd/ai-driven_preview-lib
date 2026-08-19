@@ -24,9 +24,9 @@ cache="${root}/build/${preset}/CMakeCache.txt"
 fresh=false
 if [[ -f "${cache}" ]]; then
   cached_source="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "${cache}")"
-  cached_pdfium_out="$(sed -n 's/^PREVIEW_PDFIUM_OUT:PATH=//p' "${cache}")"
+  cached_generator="$(sed -n 's/^CMAKE_GENERATOR:INTERNAL=//p' "${cache}")"
   if [[ "${cached_source}" != "${root}" ||
-        "${cached_pdfium_out}" == */out/Preview ]]; then
+        "${cached_generator}" != "Unix Makefiles" ]]; then
     printf 'Refreshing a relocated or legacy CMake cache.\n'
     fresh=true
   fi

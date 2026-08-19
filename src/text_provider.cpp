@@ -170,7 +170,7 @@ Result<Preview> make_text(const ByteSource& source, const Request& request,
         return false;
       }
       output_bytes += line.size();
-      text.lines.push_back({std::move(line)});
+      text.lines.push_back({.text = std::move(line), .styles = {}});
       line.clear();
       if (line_truncated) {
         add_warning_once(preview, "line_truncated",
@@ -269,6 +269,20 @@ Result<Preview> make_text(const ByteSource& source, const Request& request,
     text.next_offset = text.source_end;
     text.has_more = text.source_end < probe.source_size;
     preview.truncated = preview.truncated || text.has_more;
+    const bool has_lexical_context = request.byte_offset == 0;
+    const auto highlighting = highlight_text(
+        text, source.name_hint(), source.mime_hint(),
+        request.syntax_language_hint, request.limits.max_syntax_spans,
+        request.syntax_highlighting && has_lexical_context);
+    if (highlighting.span_limit_reached) {
+      add_warning_once(preview, "syntax_span_limit",
+                       "syntax highlighting stopped at max_syntax_spans");
+    }
+    if (request.syntax_highlighting && !has_lexical_context &&
+        highlighting.language != SyntaxLanguage::plain_text) {
+      add_warning_once(preview, "syntax_context_unavailable",
+                       "syntax highlighting is disabled for continuation windows");
+    }
     preview.content = std::move(text);
     return preview;
   } catch (const std::exception& error) {

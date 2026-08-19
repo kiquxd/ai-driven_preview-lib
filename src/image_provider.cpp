@@ -1,14 +1,10 @@
 #include "detail/internal.hpp"
 
-#include <jpeglibmangler.h>
-#include <jpeglib.h>
-#include <setjmp.h>
 #include <stb_image.h>
 #include <stb_image_resize2.h>
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <limits>
@@ -211,82 +207,6 @@ const char* mime_name(Format format) {
   }
 }
 
-struct JpegError {
-  jpeg_error_mgr base;
-  jmp_buf jump;
-  char message[JMSG_LENGTH_MAX]{};
-};
-
-void jpeg_failure(j_common_ptr common) {
-  auto* error = reinterpret_cast<JpegError*>(common->err);
-  (*common->err->format_message)(common, error->message);
-  longjmp(error->jump, 1);
-}
-
-Result<std::vector<Byte>> decode_jpeg(std::span<const Byte> encoded,
-                                     std::uint32_t target_width,
-                                     std::uint32_t target_height,
-                                     std::uint32_t& width,
-                                     std::uint32_t& height,
-                                     std::stop_token stop) {
-  jpeg_decompress_struct decoder{};
-  JpegError error{};
-  unsigned char* raw_pixels = nullptr;
-  decoder.err = jpeg_std_error(&error.base);
-  error.base.error_exit = jpeg_failure;
-  if (setjmp(error.jump) != 0) {
-    std::free(raw_pixels);
-    jpeg_destroy_decompress(&decoder);
-    return Error{Error::Code::invalid_data,
-                 std::string("JPEG decode failed: ") + error.message};
-  }
-  jpeg_create_decompress(&decoder);
-  jpeg_mem_src(&decoder,
-      reinterpret_cast<const unsigned char*>(encoded.data()), encoded.size());
-  jpeg_read_header(&decoder, TRUE);
-  for (unsigned denominator : {8u, 4u, 2u, 1u}) {
-    decoder.scale_num = 1;
-    decoder.scale_denom = denominator;
-    jpeg_calc_output_dimensions(&decoder);
-    if (decoder.output_width >= target_width && decoder.output_height >= target_height) {
-      break;
-    }
-  }
-  decoder.out_color_space = JCS_EXT_RGBA;
-  jpeg_start_decompress(&decoder);
-  width = decoder.output_width;
-  height = decoder.output_height;
-  std::size_t bytes = 0;
-  if (!checked_raster(width, height, bytes)) {
-    jpeg_destroy_decompress(&decoder);
-    return Error{Error::Code::limit_exceeded, "JPEG raster size overflow"};
-  }
-  raw_pixels = static_cast<unsigned char*>(std::malloc(bytes));
-  if (raw_pixels == nullptr) {
-    jpeg_destroy_decompress(&decoder);
-    return Error{Error::Code::backend_failure,
-                 "memory allocation failed while decoding JPEG"};
-  }
-  while (decoder.output_scanline < decoder.output_height) {
-    if (stop.stop_requested()) {
-      jpeg_abort_decompress(&decoder);
-      jpeg_destroy_decompress(&decoder);
-      std::free(raw_pixels);
-      return cancelled_error();
-    }
-    auto* row = reinterpret_cast<JSAMPLE*>(raw_pixels +
-        static_cast<std::size_t>(decoder.output_scanline) * width * 4);
-    JSAMPROW rows[] = {row};
-    jpeg_read_scanlines(&decoder, rows, 1);
-  }
-  jpeg_finish_decompress(&decoder);
-  jpeg_destroy_decompress(&decoder);
-  std::vector<Byte> pixels(bytes);
-  std::memcpy(pixels.data(), raw_pixels, bytes);
-  std::free(raw_pixels);
-  return pixels;
-}
-
 Result<std::vector<Byte>> decode_stb(std::span<const Byte> encoded,
                                     std::uint32_t& width,
                                     std::uint32_t& height) {
@@ -389,10 +309,8 @@ Result<Preview> make_image(const ByteSource& source, const Request& request,
     }
     if (info.width > request.limits.max_pixel_dimension ||
         info.height > request.limits.max_pixel_dimension) {
-      if (probe.format != Format::jpeg) {
-        return Error{Error::Code::limit_exceeded,
-                     "source image dimensions exceed configured limit"};
-      }
+      return Error{Error::Code::limit_exceeded,
+                   "source image dimensions exceed configured limit"};
     }
     const bool swaps_orientation = info.orientation >= 5;
     const std::uint32_t display_width = swaps_orientation ? info.height : info.width;
@@ -419,29 +337,7 @@ Result<Preview> make_image(const ByteSource& source, const Request& request,
     if (!checked_raster(info.width, info.height, source_raster_bytes)) {
       return Error{Error::Code::limit_exceeded, "source raster size overflow"};
     }
-    std::uint64_t estimated_decode_bytes = source_raster_bytes;
-    if (probe.format == Format::jpeg) {
-      const std::uint32_t decode_target_width = swaps_orientation
-          ? target_height : target_width;
-      const std::uint32_t decode_target_height = swaps_orientation
-          ? target_width : target_height;
-      unsigned denominator = 1;
-      for (const unsigned candidate : {8u, 4u, 2u, 1u}) {
-        const auto scaled_width = (info.width + candidate - 1) / candidate;
-        const auto scaled_height = (info.height + candidate - 1) / candidate;
-        denominator = candidate;
-        if (scaled_width >= decode_target_width &&
-            scaled_height >= decode_target_height) break;
-      }
-      std::size_t estimated = 0;
-      if (!checked_raster((info.width + denominator - 1) / denominator,
-                          (info.height + denominator - 1) / denominator,
-                          estimated)) {
-        return Error{Error::Code::limit_exceeded,
-                     "scaled JPEG raster size overflow"};
-      }
-      estimated_decode_bytes = estimated;
-    }
+    const std::uint64_t estimated_decode_bytes = source_raster_bytes;
     constexpr std::uint64_t decoder_copies = 2;
     const std::uint64_t orientation_copy = info.orientation == 1 ? 0 : estimated_decode_bytes;
     std::uint64_t estimated_working = probe.source_size;
@@ -475,28 +371,17 @@ Result<Preview> make_image(const ByteSource& source, const Request& request,
 
     std::uint32_t decoded_width = 0;
     std::uint32_t decoded_height = 0;
-    Result<std::vector<Byte>> decoded = Error{
-        Error::Code::backend_failure, "image decoder was not selected"};
-    if (probe.format == Format::jpeg) {
-      decoded = decode_jpeg(encoded.value(),
-                            swaps_orientation ? target_height : target_width,
-                            swaps_orientation ? target_width : target_height,
-                            decoded_width, decoded_height, request.stop_token);
-    } else {
-      const auto available_budget = request.limits.max_working_bytes >
-              encoded.value().size()
-          ? request.limits.max_working_bytes - encoded.value().size()
-          : 0;
-      StbBudgetScope budget(available_budget);
-      decoded = decode_stb(encoded.value(), decoded_width, decoded_height);
-    }
+    const auto available_budget = request.limits.max_working_bytes >
+            encoded.value().size()
+        ? request.limits.max_working_bytes - encoded.value().size()
+        : 0;
+    StbBudgetScope budget(available_budget);
+    auto decoded = decode_stb(encoded.value(), decoded_width, decoded_height);
     if (!decoded) return decoded.error();
     if (request.stop_token.stop_requested()) return cancelled_error();
     if (decoded_width != info.width || decoded_height != info.height) {
-      if (probe.format != Format::jpeg) {
-        return Error{Error::Code::invalid_data,
-                     "decoded dimensions disagree with image header"};
-      }
+      return Error{Error::Code::invalid_data,
+                   "decoded dimensions disagree with image header"};
     }
     auto oriented = orient_pixels(std::move(decoded.value()), decoded_width,
                                   decoded_height, info.orientation);
@@ -512,7 +397,7 @@ Result<Preview> make_image(const ByteSource& source, const Request& request,
       const auto resize_budget = request.limits.max_working_bytes > occupied
           ? request.limits.max_working_bytes - occupied
           : 0;
-      StbBudgetScope budget(resize_budget);
+      StbBudgetScope resize_scope(resize_budget);
       const auto result = stbir_resize_uint8_srgb(
           reinterpret_cast<const unsigned char*>(decoded.value().data()),
           static_cast<int>(decoded_width), static_cast<int>(decoded_height), 0,

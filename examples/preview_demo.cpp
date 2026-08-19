@@ -20,10 +20,8 @@ namespace {
 struct Options {
   std::filesystem::path path;
   preview::Mode mode = preview::Mode::automatic;
-  std::uint32_t page = 0;
   std::uint32_t columns = 0;
   std::uint32_t rows = 0;
-  std::string password;
 };
 
 struct TerminalSize {
@@ -55,10 +53,8 @@ void usage(std::string_view executable) {
       << "Usage: " << executable << " FILE [options]\n\n"
       << "Options:\n"
       << "  --mode auto|visual|metadata|hex\n"
-      << "  --page N          PDF page, zero based\n"
       << "  --width N         terminal columns used for output\n"
       << "  --height N        terminal rows used for output\n"
-      << "  --password TEXT   PDF password (visible in process arguments)\n"
       << "  --help\n";
 }
 
@@ -96,18 +92,14 @@ std::optional<Options> parse_options(int argc, char** argv) {
         std::cerr << "Unknown mode: " << value << "\n";
         return std::nullopt;
       }
-    } else if (argument == "--page" || argument == "--width" ||
-               argument == "--height") {
+    } else if (argument == "--width" || argument == "--height") {
       const auto number = parse_number(value);
       if (!number) {
         std::cerr << "Invalid number for " << argument << ": " << value << "\n";
         return std::nullopt;
       }
-      if (argument == "--page") options.page = *number;
       if (argument == "--width") options.columns = *number;
       if (argument == "--height") options.rows = *number;
-    } else if (argument == "--password") {
-      options.password = value;
     } else {
       std::cerr << "Unknown option: " << argument << "\n";
       return std::nullopt;
@@ -129,8 +121,6 @@ std::string_view error_code(preview::Error::Code code) {
     case Code::unsupported: return "unsupported";
     case Code::cancelled: return "cancelled";
     case Code::limit_exceeded: return "limit_exceeded";
-    case Code::password_required: return "password_required";
-    case Code::wrong_password: return "wrong_password";
     case Code::backend_failure: return "backend_failure";
   }
   return "unknown";
@@ -265,8 +255,6 @@ int main(int argc, char** argv) {
 
   preview::Request request;
   request.mode = options->mode;
-  request.page_index = options->page;
-  request.pdf_password = options->password;
   request.pixel_format = preview::PixelFormat::rgba8;
   request.viewport.text_columns = columns;
   request.viewport.text_rows = rows;

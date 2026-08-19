@@ -1,4 +1,8 @@
-# preview_lib: implementation plan
+# preview_lib: implementation plan (historical)
+
+> Superseded by the implemented architecture in `README.md` and the current
+> dependency inventory in `ai/DEPENDENCIES.md`. PDFium and the dedicated
+> libjpeg path were removed; PDFs are delegated to applications.
 
 ## 1. Goal
 

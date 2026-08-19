@@ -1,4 +1,7 @@
-# ya-ncdu integration
+# ya-ncdu integration (historical snapshot)
+
+> Superseded by the current `ya-ncdu` README and integration tests. PDFs open
+> externally and syntax spans/fullscreen image previews are now integrated.
 
 The preview MVP is integrated into a local checkout at
 `/home/kiquxd/ya-ncdu`.

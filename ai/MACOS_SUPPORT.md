@@ -1,4 +1,7 @@
-# macOS arm64 support
+# macOS arm64 support (historical PDFium version)
+
+> Superseded: the current build needs Apple Command Line Tools, not full Xcode.
+> See `README.md` for current instructions.
 
 Status date: 2026-08-19.
 

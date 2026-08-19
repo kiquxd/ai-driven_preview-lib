@@ -17,13 +17,18 @@ struct Probe {
   std::uint64_t source_size = 0;
 };
 
+struct HighlightResult {
+  SyntaxLanguage language = SyntaxLanguage::plain_text;
+  bool span_limit_reached = false;
+};
+
 Result<Probe> probe_source(const ByteSource&, const Request&) noexcept;
 Result<Preview> make_text(const ByteSource&, const Request&, const Probe&) noexcept;
 Result<Preview> make_hex(const ByteSource&, const Request&, const Probe&) noexcept;
 Result<Preview> make_image(const ByteSource&, const Request&, const Probe&) noexcept;
-Result<Preview> make_pdf(const ByteSource&, const Request&, const Probe&) noexcept;
-Result<bool> acquire_pdfium() noexcept;
-void release_pdfium() noexcept;
+HighlightResult highlight_text(TextPreview&, std::string_view,
+                               std::string_view, std::string_view,
+                               std::uint32_t, bool);
 void set_stb_allocation_budget(std::size_t) noexcept;
 void clear_stb_allocation_budget() noexcept;
 

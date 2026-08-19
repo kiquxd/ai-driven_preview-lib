@@ -1,4 +1,7 @@
-# MVP implementation handoff
+# MVP implementation handoff (historical PDFium version)
+
+> This records an earlier implementation. See `README.md` and
+> `ai/DEPENDENCIES.md` for the current product state.
 
 Status date: 2026-08-19.
 

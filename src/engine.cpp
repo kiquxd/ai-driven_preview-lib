@@ -5,7 +5,6 @@
 namespace preview {
 
 struct Engine::Impl {
-  ~Impl() { detail::release_pdfium(); }
 };
 
 Engine::Engine(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
@@ -14,15 +13,11 @@ Engine::Engine(Engine&&) noexcept = default;
 Engine& Engine::operator=(Engine&&) noexcept = default;
 
 Result<Engine> Engine::create() noexcept {
-  auto acquired = detail::acquire_pdfium();
-  if (!acquired) return acquired.error();
   try {
     return Engine(std::make_unique<Impl>());
   } catch (const std::exception& error) {
-    detail::release_pdfium();
     return Error{Error::Code::backend_failure, error.what()};
   } catch (...) {
-    detail::release_pdfium();
     return Error{Error::Code::backend_failure,
                  "unexpected error while creating preview engine"};
   }
@@ -42,7 +37,9 @@ Result<Preview> Engine::make_preview(const ByteSource& source,
         request.limits.max_total_bytes_read == 0 ||
         request.limits.max_output_bytes == 0 ||
         request.limits.max_text_lines == 0 ||
-        request.limits.max_line_bytes == 0) {
+        request.limits.max_line_bytes == 0 ||
+        (request.syntax_highlighting &&
+         request.limits.max_syntax_spans == 0)) {
       return Error{Error::Code::invalid_request,
                    "required preview limits must be non-zero"};
     }
@@ -73,8 +70,16 @@ Result<Preview> Engine::make_preview(const ByteSource& source,
       case Format::gif:
       case Format::bmp:
         return detail::make_image(source, request, probe.value());
-      case Format::pdf:
-        return detail::make_pdf(source, request, probe.value());
+      case Format::pdf: {
+        Preview result;
+        result.detected_mime = "application/pdf";
+        result.detected_format = "pdf";
+        result.metadata.items.push_back(
+            {"size", std::to_string(probe.value().source_size)});
+        result.content = UnsupportedContent{
+            "PDF rendering is disabled; open it with the system viewer"};
+        return result;
+      }
       case Format::webp: {
         if (request.mode == Mode::visual) {
           return Error{Error::Code::unsupported,
