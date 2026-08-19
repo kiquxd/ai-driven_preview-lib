@@ -358,7 +358,8 @@ The deployment target is macOS 13.0 and the binary contains only an arm64 slice.
 - Python 3: PDFium/Chromium build scripts;
 - Git: obtaining pinned source revisions during explicit developer bootstrap;
 - pkgconf and Fontconfig development metadata on Linux only;
-- Xcode command line tools and a macOS SDK on macOS arm64;
+- full Xcode and its macOS SDK on macOS arm64 (standalone Command Line Tools
+  are insufficient for PDFium's `xcodebuild`-based SDK discovery);
 - NASM/Yasm on x86/x86-64 if required by the selected libjpeg-turbo SIMD build.
 
 ### PDFium bootstrap/build

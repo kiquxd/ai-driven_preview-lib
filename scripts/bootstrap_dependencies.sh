@@ -25,8 +25,17 @@ case "${host_os}:${host_arch}" in
     platform_tag="mac-arm64"
     target_os="mac"
     target_cpu="arm64"
-    if ! command -v xcrun >/dev/null 2>&1; then
-      printf 'xcrun is required; install the Xcode command line tools.\n' >&2
+    if ! command -v xcrun >/dev/null 2>&1 ||
+       ! command -v xcodebuild >/dev/null 2>&1; then
+      printf 'Full Xcode is required to build PDFium on macOS.\n' >&2
+      exit 1
+    fi
+    if ! xcodebuild -version >/dev/null 2>&1; then
+      printf 'Full Xcode is required; Command Line Tools alone are insufficient.\n' >&2
+      printf 'After installing Xcode, select it with:\n' >&2
+      printf '  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer\n' >&2
+      printf 'Then complete setup with:\n' >&2
+      printf '  sudo xcodebuild -runFirstLaunch\n' >&2
       exit 1
     fi
     xcrun --sdk macosx --show-sdk-path >/dev/null

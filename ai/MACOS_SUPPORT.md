@@ -19,6 +19,10 @@ The pinned PDFium revision is unchanged. The bootstrap selects a native output:
 - `out/Preview-mac-arm64`, `target_os="mac"`, `target_cpu="arm64"`, system Xcode
   and SDK, sysroot off.
 
+PDFium requires a full Xcode installation. The standalone Command Line Tools
+package supplies `xcrun`, but not a usable `xcodebuild`, and is therefore not
+sufficient. The bootstrap rejects that configuration before fetching/building.
+
 Both produce the complete static `obj/libpdfium.a`. macOS folds it into
 `libpreview.dylib` with `-force_load` and links the framework closure declared by
 the selected PDFium source graph: AppKit, CoreFoundation, and CoreGraphics.

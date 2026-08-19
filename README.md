@@ -47,7 +47,8 @@ PDFium's public API is process-global; concurrent use of the same custom
 
 Supported targets are Linux x86-64 and macOS arm64. The bootstrap pins and
 builds a minimal native PDFium closure locally; nothing is installed
-system-wide. On macOS, Xcode command line tools and the macOS SDK are required.
+system-wide. On macOS, a full Xcode installation and its macOS SDK are required;
+the standalone Command Line Tools package is insufficient for PDFium.
 
 ```sh
 ./scripts/bootstrap_dependencies.sh
