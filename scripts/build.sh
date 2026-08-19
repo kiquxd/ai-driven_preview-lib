@@ -21,17 +21,21 @@ esac
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cache="${root}/build/${preset}/CMakeCache.txt"
-fresh=()
+fresh=false
 if [[ -f "${cache}" ]]; then
   cached_source="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "${cache}")"
   cached_pdfium_out="$(sed -n 's/^PREVIEW_PDFIUM_OUT:PATH=//p' "${cache}")"
   if [[ "${cached_source}" != "${root}" ||
         "${cached_pdfium_out}" == */out/Preview ]]; then
     printf 'Refreshing a relocated or legacy CMake cache.\n'
-    fresh=(--fresh)
+    fresh=true
   fi
 fi
 
-cmake "${fresh[@]}" --preset "${preset}"
+if [[ "${fresh}" == true ]]; then
+  cmake --fresh --preset "${preset}"
+else
+  cmake --preset "${preset}"
+fi
 cmake --build --preset "${preset}"
 ctest --preset "${preset}"
