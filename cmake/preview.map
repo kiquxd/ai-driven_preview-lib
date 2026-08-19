@@ -1,0 +1,13 @@
+PREVIEW_0.1 {
+  global:
+    _ZN7preview6Engine6createEv;
+    _ZN7preview6EngineC1EOS0_;
+    _ZN7preview6EngineC2EOS0_;
+    _ZN7preview6EngineD1Ev;
+    _ZN7preview6EngineD2Ev;
+    _ZN7preview6EngineaSEOS0_;
+    _ZNK7preview6Engine12make_previewERKNS_10ByteSourceERKNS_7RequestE;
+    _ZN7preview15open_local_file*;
+  local:
+    *;
+};

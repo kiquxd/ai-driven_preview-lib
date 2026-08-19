@@ -1,0 +1,135 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "${sourceDir}/.deps/pdfium-work/pdfium/third_party/ninja/ninja",
+        "CMAKE_C_COMPILER": "${sourceDir}/.deps/pdfium-work/pdfium/third_party/llvm-build/Release+Asserts/bin/clang",
+        "CMAKE_CXX_COMPILER": "${sourceDir}/.deps/pdfium-work/pdfium/third_party/llvm-build/Release+Asserts/bin/clang++",
+        "CMAKE_SYSROOT": "${sourceDir}/.deps/pdfium-work/pdfium/build/linux/debian_bullseye_amd64-sysroot",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
+        "PREVIEW_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "dev",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "asan",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PREVIEW_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "tsan",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PREVIEW_ENABLE_SANITIZERS": "ON",
+        "PREVIEW_SANITIZER_SET": "thread"
+      }
+    },
+    {
+      "name": "mac-base",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "${sourceDir}/.deps/pdfium-work/pdfium/third_party/ninja/ninja",
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "PREVIEW_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "mac-dev",
+      "inherits": "mac-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "mac-asan",
+      "inherits": "mac-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PREVIEW_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "mac-tsan",
+      "inherits": "mac-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PREVIEW_ENABLE_SANITIZERS": "ON",
+        "PREVIEW_SANITIZER_SET": "thread"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "asan", "configurePreset": "asan" },
+    { "name": "tsan", "configurePreset": "tsan" },
+    { "name": "mac-dev", "configurePreset": "mac-dev" },
+    { "name": "mac-asan", "configurePreset": "mac-asan" },
+    { "name": "mac-tsan", "configurePreset": "mac-tsan" }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "environment": { "ASAN_OPTIONS": "detect_leaks=1" },
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "environment": { "TSAN_OPTIONS": "halt_on_error=1" },
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "mac-dev",
+      "configurePreset": "mac-dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "mac-asan",
+      "configurePreset": "mac-asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "mac-tsan",
+      "configurePreset": "mac-tsan",
+      "environment": { "TSAN_OPTIONS": "halt_on_error=1" },
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

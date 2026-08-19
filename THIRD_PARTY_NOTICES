@@ -1,0 +1,25 @@
+preview 0.1 incorporates third-party software. The complete license texts are
+distributed with the corresponding source dependency and must accompany binary
+redistributions.
+
+PDFium and the code folded into its complete static archive
+  Revision: 78adc7c30182d34921cbe6ec0fe9beb2ea94d200
+  Components used by this build: PDFium, Abseil, AGG, Dragonbox, fast_float,
+  FreeType, HarfBuzz, ICU, Little CMS 2, libjpeg-turbo, OpenJPEG, libpng and
+  zlib.
+  Licenses: see the named files installed under share/preview/licenses.
+  Source/license inventory: https://pdfium.googlesource.com/pdfium/
+
+libjpeg-turbo (the copy bundled by PDFium)
+  Revision: 640f254ad0fa03f6b1f29f89b7dd9366f2f6e533
+  Licenses: IJG, BSD-3-Clause and zlib licenses; see LICENSE.md in its source.
+
+stb_image and stb_image_resize2
+  Revision: 2c980bb59875b0d32144a71867fbdebb2f77cd20
+  License: MIT or public domain, at the user's option.
+  License text: third_party/stb/LICENSE in the source distribution.
+
+Runtime system libraries and frameworks are dynamically resolved from the
+target system. Linux uses Fontconfig and the normal ELF/C++ runtime closure;
+macOS uses AppKit, CoreFoundation, CoreGraphics, and the normal Mach-O/libc++
+closure. They are not copied into the preview package.

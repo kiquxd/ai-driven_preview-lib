@@ -1,0 +1,25 @@
+# Downloaded sources and generated dependency toolchains (PDFium is several GB).
+/.deps/
+
+# CMake build and install trees.
+/build/
+/build-*/
+/cmake-build-*/
+/install/
+/out/
+/compile_commands.json
+/CMakeUserPresets.json
+
+# Test, coverage and profiling output.
+/Testing/
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+
+# Platform and editor-local files.
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
